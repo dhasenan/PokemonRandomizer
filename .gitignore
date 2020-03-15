@@ -1,0 +1,6 @@
+obj/
+bin/
+*.xxd
+*.swp
+.vs
+*.csproj.user

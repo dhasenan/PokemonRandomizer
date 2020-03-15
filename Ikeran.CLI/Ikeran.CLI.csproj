@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <StartupObject>Ikeran.CLI.MainClass</StartupObject>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugType>full</DebugType>
+    <Optimize>true</Optimize>
+    <CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Ikeran.NDS\Ikeran.NDS.csproj" />
+    <ProjectReference Include="..\Ikeran.PokemonShuffler\Ikeran.PokemonShuffler.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="NLog" Version="4.6.8" />
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+    <PackageReference Include="Mono.Options" Version="6.6.0.161" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,45 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Util", "Util\Util.csproj", "{275B44CA-9AEC-4792-B327-E1933600E9F2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ikeran.PokemonShuffler", "Ikeran.PokemonShuffler\Ikeran.PokemonShuffler.csproj", "{2B5007B3-9047-4C04-BFC3-97FA0203DB92}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ikeran.NDS", "Ikeran.NDS\Ikeran.NDS.csproj", "{50940B37-D2E3-4867-9E70-515FBAB6C822}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ikeran.CLI", "Ikeran.CLI\Ikeran.CLI.csproj", "{16AB36A0-7DD8-48F8-80F7-2BD862E6F0CD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ikeran.Util.Test", "Ikeran.Util.Test\Ikeran.Util.Test.csproj", "{BF7630EC-03EE-40E7-898C-004396D5DAA9}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x86 = Debug|x86
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{275B44CA-9AEC-4792-B327-E1933600E9F2}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{275B44CA-9AEC-4792-B327-E1933600E9F2}.Debug|x86.Build.0 = Debug|Any CPU
+		{275B44CA-9AEC-4792-B327-E1933600E9F2}.Release|x86.ActiveCfg = Release|Any CPU
+		{275B44CA-9AEC-4792-B327-E1933600E9F2}.Release|x86.Build.0 = Release|Any CPU
+		{2B5007B3-9047-4C04-BFC3-97FA0203DB92}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{2B5007B3-9047-4C04-BFC3-97FA0203DB92}.Debug|x86.Build.0 = Debug|Any CPU
+		{2B5007B3-9047-4C04-BFC3-97FA0203DB92}.Release|x86.ActiveCfg = Release|Any CPU
+		{2B5007B3-9047-4C04-BFC3-97FA0203DB92}.Release|x86.Build.0 = Release|Any CPU
+		{50940B37-D2E3-4867-9E70-515FBAB6C822}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{50940B37-D2E3-4867-9E70-515FBAB6C822}.Debug|x86.Build.0 = Debug|Any CPU
+		{50940B37-D2E3-4867-9E70-515FBAB6C822}.Release|x86.ActiveCfg = Release|Any CPU
+		{50940B37-D2E3-4867-9E70-515FBAB6C822}.Release|x86.Build.0 = Release|Any CPU
+		{16AB36A0-7DD8-48F8-80F7-2BD862E6F0CD}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{16AB36A0-7DD8-48F8-80F7-2BD862E6F0CD}.Debug|x86.Build.0 = Debug|Any CPU
+		{16AB36A0-7DD8-48F8-80F7-2BD862E6F0CD}.Release|x86.ActiveCfg = Release|Any CPU
+		{16AB36A0-7DD8-48F8-80F7-2BD862E6F0CD}.Release|x86.Build.0 = Release|Any CPU
+		{BF7630EC-03EE-40E7-898C-004396D5DAA9}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{BF7630EC-03EE-40E7-898C-004396D5DAA9}.Debug|x86.Build.0 = Debug|Any CPU
+		{BF7630EC-03EE-40E7-898C-004396D5DAA9}.Release|x86.ActiveCfg = Release|Any CPU
+		{BF7630EC-03EE-40E7-898C-004396D5DAA9}.Release|x86.Build.0 = Release|Any CPU
+		{531D98E6-705E-4B2F-8E13-695DD5C6BD0B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{531D98E6-705E-4B2F-8E13-695DD5C6BD0B}.Debug|x86.Build.0 = Debug|Any CPU
+		{531D98E6-705E-4B2F-8E13-695DD5C6BD0B}.Release|x86.ActiveCfg = Release|Any CPU
+		{531D98E6-705E-4B2F-8E13-695DD5C6BD0B}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
