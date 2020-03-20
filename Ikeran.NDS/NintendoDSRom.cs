@@ -19,6 +19,8 @@ namespace Ikeran.NDS
         private readonly static byte[] _bigEndianSectionMarker = { 0xfe, 0xff, 0x00, 0x01 };
         public string Path { get; }
         public string Name { get; }
+        public FileTable FileTable { get; }
+
         public readonly List<Slice<byte>> FilesById;
         public readonly List<Segment> Segments;
         private Slice<byte> _data;
@@ -45,58 +47,7 @@ namespace Ikeran.NDS
             var fat = _data[fatOffset, fatOffset + fatLength];
             var fnt = _data[fntOffset, fntOffset + fntLength];
 
-            var fileTable = new FileTable(fat, fnt);
-        }
-
-        private void ScanForArchives()
-        {
-            Segments.Clear();
-            var remaining = _data;
-
-
-            int nextLoggedOffset = LogReadBytes;
-            while (remaining.Count > 8)
-            {
-                if (remaining.Offset >= nextLoggedOffset)
-                {
-                    nextLoggedOffset += LogReadBytes;
-                    log.Trace("progress: {0} out of {1}", remaining.Offset, _data.Count);
-                }
-                if (remaining.After(4).StartsWith(_sectionMarker))
-                {
-                    var s = TryReadSegment(remaining, bigEndian: false);
-                    if (s != null && s.Data.Count > 0)
-                    {
-                        log.Trace("found a little-endian segment at {0}", s.Data.Offset);
-                        remaining = remaining.After(s.Data.Count);
-                        continue;
-                    }
-                }
-                else if (remaining.After(4).StartsWith(_bigEndianSectionMarker))
-                {
-                    var s = TryReadSegment(remaining, bigEndian: true);
-                    if (s != null && s.Data.Count > 0)
-                    {
-                        log.Trace("found a big-endian segment at {0}", s.Data.Offset);
-                        remaining = remaining.After(s.Data.Count);
-                        continue;
-                    }
-                }
-                remaining = remaining.After(1);
-            }
-        }
-
-        private Segment TryReadSegment(Slice<byte> remaining, bool bigEndian)
-        {
-            if (!Segment.KnownMagicBytes.Any(x => remaining.StartsWith(x)))
-            {
-                return null;
-            }
-            remaining.BigEndian = bigEndian;
-            // We have a segment! Add it to the list and skip over it.
-            var segment = new Segment(remaining);
-            Segments.Add(segment);
-            return segment;
+            FileTable = new FileTable(fat, fnt, _data);
         }
     }
 }

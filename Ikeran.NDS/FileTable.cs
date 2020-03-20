@@ -7,25 +7,41 @@ using NLog;
 
 namespace Ikeran.NDS
 {
-
     public class FileTable
     {
-        public FileTable(Slice<byte> fat, Slice<byte> fnt)
+        private static readonly Logger log = LogManager.GetCurrentClassLogger();
+
+        public FileTable(Slice<byte> fat, Slice<byte> fnt, Slice<byte> data)
         {
-            var files = new List<RelativeRange>();
-            while (fat.Count >= 8)
+            Entry GetFile(ushort fileId, string name)
             {
-                files.Add(new RelativeRange { Start = fat.ReadUInt(0), End = fat.ReadUInt(4) });
-                fat = fat.After(8);
+                if (fileId >= fat.Count / 8)
+                {
+                    throw new Exception($"invalid file name {name} id {fileId:X}");
+                }
+                var start = fat.ReadUInt(8 * fileId);
+                var end = fat.ReadUInt(8 * fileId + 4);
+                if (end > data.Count)
+                {
+                    throw new Exception($"file {name} {fileId:X}: have {data.Count} bytes of data, file data from {start:X}-{end:X}");
+                }
+                var fileData = data[start, end];
+                return new Entry
+                {
+                    ID = (ushort)(fileId | 0xF000),
+                    Name = name,
+                    IsFile = true,
+                    Data = fileData,
+                };
             }
 
             // first read the root directory
             var root = new Entry(fnt, 0);
             var numFiles = root.parentDirectory;
             root.parentDirectory = 0;
-            root.ID = 0xF000;  // root directory is always 0xF000
-            // and now the rest
-            var dirs = new List<Entry>{root};
+            root.ID = 0xF000;
+            Root = root;
+            var dirs = new List<Entry> { root };
             for (ushort i = 1; i < numFiles; i++)
             {
                 dirs.Add(new Entry(fnt, i));
@@ -40,51 +56,66 @@ namespace Ikeran.NDS
             // I think?
 
             var nameSection = fnt.After(root.nameListStart);
-
+            uint minFileId = uint.MaxValue;
+            uint maxFileId = 0;
             for (int i = 0; i < dirs.Count; i++)
             {
                 var dir = dirs[i];
-                uint endOfMyNames = (i < dirs.Count - 1) ? dirs[i + 1].nameListStart: (uint)fnt.Count;
+                uint endOfMyNames = (i < dirs.Count - 1) ? dirs[i + 1].nameListStart : (uint)fnt.Count;
                 var names = ParseNames(fnt[dir.nameListStart, endOfMyNames]);
-                int name = 0;
-                foreach (var kid in dirs.Where(x => x.parentDirectory == dir.ID).ToList())
+                ushort fileNum = 0;
+                for (int j = 0; j < names.Count; j++)
                 {
-                    var ent = names[name];
-                    if (!ent.IsFile)
+                    var name = names[j];
+                    if (name.IsFile)
                     {
-                        kid.IsFile = false;
-                        kid.Name = ent.Name;
-                        continue;
+                        ushort fileId = (ushort)(fileNum + dir.firstFileIndex);
+                        log.Info($"dir {dir.ID:X}: adding file {fileId:X} {name.Name}");
+                        minFileId = Math.Min(minFileId, fileId);
+                        maxFileId = Math.Max(maxFileId, fileId);
+                        var file = GetFile(fileId, name.Name);
+                        file.Parent = dir;
+                        dir.Entries.Add(file);
+                        fileNum++;
                     }
-                    // Block of files.
-                    while (names[name].IsFile)
+                    else
                     {
-                        dir.Entries.Add(new Entry { Name = names[name].Name, IsFile = true });
+                        var childDir = dirs.FirstOrDefault(x => (x.ID | 0xF000) == name.DirectoryId);
+                        if (childDir == null)
+                        {
+                            throw new Exception($"failed to find directory id {name.DirectoryId:X} name {name.Name}");
+                        }
+                        childDir.Name = name.Name;
+                        childDir.Parent = dir;
+                        dir.Entries.Add(childDir);
                     }
                 }
             }
 
-            // Set things' names
-            //SetNames(root, names);
-
-            // Now let's add files into directories.
-            // This structure requires each directory tree to be contiguous in memory.
-            // A directory encompasses a range of bytes, which we get by its start
-            // and the start of its next sibling. There's also the "file" type of
-            // directory, which means "these are files that are siblings to a folder".
-            // I think that can also be implicit maybe?
-
-            // okay, let's grab the filenames
-            // filenames are length-prefixed strings
+            log.Trace($"We've found names for files between {minFileId} and {maxFileId} inclusive");
+            AnonymousFiles = new List<Entry>();
+            for (ushort fileId = 0; fileId < minFileId; fileId++)
+            {
+                AnonymousFiles.Add(GetFile(fileId, $"_anon_${fileId}"));
+            }
+            for (ushort fileId = (ushort)(maxFileId + 1); fileId < fat.Count / 8; fileId++)
+            {
+                AnonymousFiles.Add(GetFile(fileId, $"_anon_${fileId}"));
+            }
         }
+
+        public Entry Root { get; }
+        public List<Entry> AnonymousFiles { get; }
 
         private static List<NameEntry> ParseNames(Slice<byte> nameSection)
         {
             var names = new List<NameEntry>();
+            // There's an off-by-one here somewhere and I'm not sure where.
             while (nameSection.Count > 0)
             {
                 var name = new NameEntry();
                 var length = nameSection[0];
+                if (length == 0) break;
                 if ((length & 0x80) == 0x80)
                 {
                     length -= 0x80;
@@ -105,54 +136,10 @@ namespace Ikeran.NDS
             }
             return names;
         }
-
-        private static void SetChildExtents(Entry parent)
-        {
-            if (parent.Entries.Count == 0)
-            {
-                return;
-            }
-            for (int i = 0; i < parent.Entries.Count - 1; i++)
-            {
-                var e = parent.Entries[i];
-                e.lastFileIndex = parent.Entries[i + 1].firstFileIndex;
-                SetChildExtents(e);
-            }
-            var last = parent.Entries.Last();
-            last.lastFileIndex = parent.lastFileIndex;
-            SetChildExtents(last);
-        }
-
-        private static void ExpandFiles(Entry parent, List<RelativeRange> files, Slice<byte> data)
-        {
-            var entries = new List<Entry>();
-            foreach (var entry in parent.Entries)
-            {
-                if (!entry.IsFile)
-                {
-                    ExpandFiles(entry, files, data);
-                    entries.Add(entry);
-                    continue;
-                }
-                for (int i = entry.firstFileIndex; i < entry.lastFileIndex; i++)
-                {
-                    entries.Add(new Entry
-                    {
-                        ID = (ushort)i,
-                        firstFileIndex = (ushort)i,
-                        lastFileIndex = (ushort)(i + 1),
-                        Data = data[files[i].Start, files[i].End]
-                    });
-                }
-            }
-            parent.Entries.Clear();
-            parent.Entries.AddRange(entries);
-        }
     }
 
     internal class NameEntry
     {
-        internal int Offset;
         internal string Name;
         internal bool IsFile;
         internal ushort DirectoryId;
@@ -167,8 +154,6 @@ namespace Ikeran.NDS
         internal ushort firstFileIndex;
         internal ushort parentDirectory;
         internal RelativeRange fileData;
-        internal Slice<byte> names;
-        internal ushort lastFileIndex;
         internal uint nameListStart;
 
         public Entry Parent { get; internal set; }
@@ -177,6 +162,37 @@ namespace Ikeran.NDS
         public bool IsFile { get; internal set; }
         public bool IsDir { get => !IsFile; }
         public Slice<byte>? Data { get; internal set; }
+        public string Magic
+        {
+            get
+            {
+                if (Data.HasValue && Data.Value.Count > 4)
+                {
+                    for (int i = 0; i < 4; i++)
+                    {
+                        if (!(Data.Value[i] >= (byte)'A' && Data.Value[i] <= (byte)'Z') &&
+                            !(Data.Value[i] >= (byte)'a' && Data.Value[i] <= (byte)'z'))
+                        {
+                            return null;
+                        }
+                    }
+                    return Data.Value.ReadString(0, 4);
+                }
+                return null;
+            }
+        }
+
+        public string Path
+        {
+            get
+            {
+                if (Parent == null)
+                {
+                    return Name;
+                }
+                return Parent.Path + "/" + Name;
+            }
+        }
 
         public Entry() { }
 
