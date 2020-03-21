@@ -9,9 +9,9 @@ namespace Ikeran.Util
     {
         public Slice(Slice<T> data, int start, int end)
         {
-            Contract.Assert(() => start >= 0);
-            Contract.Assert(() => start <= end);
-            Contract.Assert(() => end <= data.Count);
+            Contract.Assert(start >= 0, () => $"start {start} must be non-negative");
+            Contract.Assert(start <= end, () => $"start {start} must be less than end {end}");
+            Contract.Assert(end <= data.Count, () => $"end {end} must be less than count ${data.Count}");
 
             Array = data.Array;
             Offset = start + data.Offset;

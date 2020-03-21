@@ -76,7 +76,7 @@ namespace Ikeran.NDS
         /// <param name="allocTable">The file allocation table (FAT)</param>
         /// <param name="nameTable">The file name table (FNT)</param>
         /// <param name="data">The data (eg GMIF)</param>
-        public void Load(Slice<byte> allocTable, Slice<byte> nameTable, Slice<byte> data)
+        public virtual void Load(Slice<byte> allocTable, Slice<byte> nameTable, Slice<byte> data)
         {
             AllocTable = allocTable;
             NameTable = nameTable;
@@ -104,6 +104,11 @@ namespace Ikeran.NDS
             for (int i = 0; i < dirs.Count; i++)
             {
                 var dir = dirs[i];
+                if (dir.nameListStart == 0)
+                {
+                    // There is no name list.
+                    continue;
+                }
                 uint endOfMyNames = (i < dirs.Count - 1) ? dirs[i + 1].nameListStart : (uint)fnt.Count;
                 log.Info($"name list {i} data: {dir.nameListStart:x} - {endOfMyNames}; fnt size: {fnt.Count:x}; num dirs: {dirs.Count}");
                 var names = ParseNames(fnt[dir.nameListStart, endOfMyNames]);
@@ -172,9 +177,10 @@ namespace Ikeran.NDS
 
         protected abstract List<Entry> ReadDirectories();
 
-        internal static List<NameEntry> ParseNames(Slice<byte> nameSection)
+        internal List<NameEntry> ParseNames(Slice<byte> nameSection)
         {
             var names = new List<NameEntry>();
+            log.Info("name section: start {0:x}, length {1:x}", nameSection.Offset, nameSection.Count);
             while (nameSection.Count > 0)
             {
                 var name = new NameEntry();
@@ -189,6 +195,7 @@ namespace Ikeran.NDS
                 {
                     name.IsFile = true;
                 }
+                log.Info("name found! length {0}, is file {1}", length, name.IsFile);
                 nameSection = nameSection.After(1);
                 name.Name = nameSection.ReadString(0, length);
                 nameSection = nameSection.After(length);

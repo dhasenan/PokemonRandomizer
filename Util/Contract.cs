@@ -16,6 +16,13 @@ namespace Ikeran.Util
         {
             if (!b) throw new ContractException("contract failed: " + message);
         }
+        public static void Assert(bool b, Func<string> message)
+        {
+            if (!b)
+            {
+                throw new ContractException("assertion failed: " + message());
+            }
+        }
 
         public static void Requires(params Expression<Func<bool>>[] exprs)
         {
@@ -97,10 +104,18 @@ namespace Ikeran.Util
                 throw new ContractException("assertion failed");
             }
         }
-        public static void Assert(bool b, string message) {
+        public static void Assert(bool b, string message)
+        {
             if (!b)
             {
                 throw new ContractException("assertion failed: " + message);
+            }
+        }
+        public static void Assert(bool b, Func<string> message)
+        {
+            if (!b)
+            {
+                throw new ContractException("assertion failed: " + message());
             }
         }
         public static void Requires(params Func<bool>[] exprs) { }

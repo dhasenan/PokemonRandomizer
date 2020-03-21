@@ -6,13 +6,22 @@ namespace Ikeran.NDS
 {
     public class NarcFileTable : FileTable
     {
+        private uint _numFiles;
+
         public NarcFileTable()
         {
             log = LogManager.GetCurrentClassLogger();
         }
 
+        public override void Load(Slice<byte> allocTable, Slice<byte> nameTable, Slice<byte> data)
+        {
+            _numFiles = allocTable.ReadUInt(0);
+            base.Load(allocTable.After(4), nameTable, data);
+        }
+
         protected override List<Entry> ReadDirectories()
         {
+            // NARCs don't usually have directories.
             var dirs = new List<Entry>();
 
             var fnt = NameTable;
@@ -26,8 +35,8 @@ namespace Ikeran.NDS
             {
                 IsFile = false,
                 ID = 0xF000,
-                firstFileIndex = fnt.ReadUShort(4),
-                nameListStart = fnt.ReadUInt(0),
+                firstFileIndex = (ushort)fnt.ReadUInt(0),
+                nameListStart = fnt.ReadUShort(4),
             };
             dirs.Add(Root);
 
@@ -36,8 +45,8 @@ namespace Ikeran.NDS
                 dirs.Add(new Entry
                 {
                     ID = (ushort)(0xF000 | i),
-                    nameListStart = fnt.ReadUInt(i * 8),
-                    firstFileIndex = fnt.ReadUShort(i * 8 + 4),
+                    firstFileIndex = (ushort)fnt.ReadUInt(i * 8),
+                    nameListStart = fnt.ReadUShort(i * 8 + 4),
                     parentDirectory = fnt.ReadUShort(i * 8 + 6),
                     IsFile = false,
                 });
