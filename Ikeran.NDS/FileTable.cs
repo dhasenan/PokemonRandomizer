@@ -7,78 +7,100 @@ using NLog;
 
 namespace Ikeran.NDS
 {
-    public class FileTable
+    /// <summary>
+    /// A file table is a means to access files, typically by path.
+    /// </summary>
+    public interface IFileTable
     {
-        public enum Mode
+        /// <summary>
+        /// The root directory.
+        /// </summary>
+        Entry Root { get; }
+
+        /// <summary>
+        /// Anonymous files -- files not associated with any directory, without any name.
+        /// </summary>
+        IList<Entry> AnonymousFiles { get; }
+
+        /// <summary>
+        /// Look up a file by path.
+        /// </summary>
+        /// <returns>The matching file, or null if not found.</returns>
+        /// <param name="path">The path, with '/' as the path element separator</param>
+        Entry TryLookUp(string path);
+
+        /// <summary>
+        /// Load a filesystem
+        /// </summary>
+        /// <param name="allocTable">The file allocation table (FAT)</param>
+        /// <param name="nameTable">The file name table (FNT)</param>
+        /// <param name="data">The data (eg GMIF)</param>
+        void Load(Slice<byte> allocTable, Slice<byte> nameTable, Slice<byte> data);
+    }
+
+    public abstract class FileTable : IFileTable
+    {
+        public Entry Root { get; protected set; }
+        public IList<Entry> AnonymousFiles { get; } = new List<Entry>();
+        protected Slice<byte> Data, NameTable, AllocTable;
+        protected Logger log;
+
+        /// <summary>
+        /// Look up a file by path.
+        /// </summary>
+        /// <returns>The matching file, or null if not found.</returns>
+        /// <param name="path">The path, with '/' as the path element separator</param>
+        public Entry TryLookUp(string path)
         {
-            Rom,
-            Narc,
+            Entry current = Root;
+            var parts = path.Trim('/').Split('/');
+            foreach (var part in parts)
+            {
+                foreach (var child in current.Entries)
+                {
+                    if (child.Name == part)
+                    {
+                        current = child;
+                        goto next;
+                    }
+                }
+                return null;
+            next: { }
+            }
+            return current;
         }
 
-        private static readonly Logger log = LogManager.GetCurrentClassLogger();
-
-        public FileTable(Slice<byte> fat, Slice<byte> fnt, Slice<byte> data, Mode mode)
+        /// <summary>
+        /// Load a filesystem
+        /// </summary>
+        /// <param name="allocTable">The file allocation table (FAT)</param>
+        /// <param name="nameTable">The file name table (FNT)</param>
+        /// <param name="data">The data (eg GMIF)</param>
+        public void Load(Slice<byte> allocTable, Slice<byte> nameTable, Slice<byte> data)
         {
-            log.Info($"fat: {fat.Offset:x}; fnt: {fnt.Offset:x}; data: {data.Offset:x}");
-            Entry GetFile(ushort fileId, string name)
-            {
-                if (fileId >= fat.Count / 8)
-                {
-                    throw new Exception($"invalid file, name {name}, id {fileId:X}");
-                }
-                var start = fat.ReadUInt(8 * fileId);
-                var end = fat.ReadUInt(8 * fileId + 4);
-                if (end > data.Count)
-                {
-                    throw new Exception($"file {name} {fileId:X}: have {data.Count} bytes of data, file data from {start:X}-{end:X}");
-                }
-                var fileData = data[start, end];
-                return new Entry
-                {
-                    ID = (ushort)(fileId | 0xF000),
-                    Name = name,
-                    IsFile = true,
-                    Data = fileData,
-                };
-            }
+            AllocTable = allocTable;
+            NameTable = nameTable;
+            Data = data;
 
-            // first read the root directory
-            var root = new Entry(fnt, 0, mode == Mode.Narc ? 4 : 0)
-            {
-                IsFile = false
-            };
-            int numFiles;
-            if (mode == Mode.Rom)
-            {
-                numFiles = root.parentDirectory;
-                root.parentDirectory = 0;
-            }
-            else
-            {
-                numFiles = fat.ReadInt(0);
-                fat = fat.After(4);
-            }
-            root.parentDirectory = 0;
-            root.ID = 0xF000;
-            Root = root;
-            var dirs = new List<Entry> { root };
-            for (ushort i = 1; i < numFiles; i++)
-            {
-                dirs.Add(new Entry(fnt, i, mode == Mode.Narc ? 4 : 0));
-            }
+            var fnt = nameTable;
+            var fat = allocTable;
+
+            var dirs = ReadDirectoriesWithOffset();
             dirs.Sort((a, b) => a.firstFileIndex.CompareTo(b.firstFileIndex));
+            Root = dirs[0];
+            Root.ID = 0xF000;
 
             uint minFileId = uint.MaxValue;
             uint maxFileId = 0;
-            if (root.nameListStart == 0)
+            if (Root.nameListStart == 0)
             {
                 // We don't have any explicitly named files.
                 minFileId = 1;
                 maxFileId = 0;
                 goto nameListRead;
             }
-            log.Info("root name list starts at {0:x}", root.nameListStart);
-            var nameSection = fnt.After(root.nameListStart);
+            log.Info("root name list starts at {0:x}", Root.nameListStart);
+            var nameSection = fnt.After(Root.nameListStart);
             for (int i = 0; i < dirs.Count; i++)
             {
                 var dir = dirs[i];
@@ -116,7 +138,6 @@ namespace Ikeran.NDS
 
             log.Trace($"We've found names for files between {minFileId} and {maxFileId} inclusive");
         nameListRead:
-            AnonymousFiles = new List<Entry>();
             for (ushort fileId = 0; fileId < minFileId; fileId++)
             {
                 AnonymousFiles.Add(GetFile(fileId, $"_anon_${fileId}"));
@@ -127,30 +148,31 @@ namespace Ikeran.NDS
             }
         }
 
-        public Entry TryLookUp(string extractedFile)
+        protected Entry GetFile(ushort fileId, string name)
         {
-            Entry current = Root;
-            var parts = extractedFile.Trim('/').Split('/');
-            foreach (var part in parts)
+            if (fileId >= AllocTable.Count / 8)
             {
-                foreach (var child in current.Entries)
-                {
-                    if (child.Name == part)
-                    {
-                        current = child;
-                        goto next;
-                    }
-                }
-                return null;
-                next: { }
+                throw new Exception($"invalid file, name {name}, id {fileId:X}");
             }
-            return current;
+            var start = AllocTable.ReadUInt(8 * fileId);
+            var end = AllocTable.ReadUInt(8 * fileId + 4);
+            if (end > Data.Count)
+            {
+                throw new Exception($"file {name} {fileId:X}: have {Data.Count} bytes of data, file data from {start:X}-{end:X}");
+            }
+            var fileData = Data[start, end];
+            return new Entry
+            {
+                ID = (ushort)(fileId | 0xF000),
+                Name = name,
+                IsFile = true,
+                Data = fileData,
+            };
         }
 
-        public Entry Root { get; }
-        public List<Entry> AnonymousFiles { get; }
+        protected abstract List<Entry> ReadDirectoriesWithOffset();
 
-        private static List<NameEntry> ParseNames(Slice<byte> nameSection)
+        internal static List<NameEntry> ParseNames(Slice<byte> nameSection)
         {
             var names = new List<NameEntry>();
             while (nameSection.Count > 0)
@@ -181,102 +203,50 @@ namespace Ikeran.NDS
         }
     }
 
+    public class RomFileTable : FileTable
+    {
+        public RomFileTable()
+        {
+            log = LogManager.GetCurrentClassLogger();
+        }
+
+        protected override List<Entry> ReadDirectoriesWithOffset()
+        {
+            var fat = AllocTable;
+            var fnt = NameTable;
+            var root = new Entry(fnt, 0, 0)
+            {
+                IsFile = false
+            };
+            int numFiles = root.parentDirectory;
+            root.parentDirectory = 0;
+            var dirs = new List<Entry> { root };
+            for (ushort i = 1; i < numFiles; i++)
+            {
+                dirs.Add(new Entry(fnt, i, 0));
+            }
+            dirs.Sort((a, b) => a.firstFileIndex.CompareTo(b.firstFileIndex));
+            return dirs;
+        }
+    }
+
+    public class NarcFileTable : FileTable
+    {
+        public NarcFileTable()
+        {
+            log = LogManager.GetCurrentClassLogger();
+        }
+
+        protected override List<Entry> ReadDirectoriesWithOffset()
+        {
+            throw new NotImplementedException();
+        }
+    }
+
     internal class NameEntry
     {
         internal string Name;
         internal bool IsFile;
         internal ushort DirectoryId;
-    }
-
-    public class Entry
-    {
-        private static readonly Logger log = LogManager.GetCurrentClassLogger();
-        const byte DirMask = 0b1000_0000;
-
-        public ushort ID { get; internal set; }
-        internal ushort firstFileIndex;
-        internal ushort parentDirectory;
-        internal RelativeRange fileData;
-        internal uint nameListStart;
-
-        public Entry Parent { get; internal set; }
-        public string Name { get; internal set; }
-        public List<Entry> Entries { get; } = new List<Entry>();
-        public bool IsFile { get; internal set; }
-        public bool IsDir { get => !IsFile; }
-        public Slice<byte>? Data { get; internal set; }
-        public string Magic
-        {
-            get
-            {
-                if (Data.HasValue && Data.Value.Count > 4)
-                {
-                    for (int i = 0; i < 4; i++)
-                    {
-                        if (!(Data.Value[i] >= (byte)'A' && Data.Value[i] <= (byte)'Z') &&
-                            !(Data.Value[i] >= (byte)'a' && Data.Value[i] <= (byte)'z'))
-                        {
-                            return null;
-                        }
-                    }
-                    return Data.Value.ReadString(0, 4);
-                }
-                return null;
-            }
-        }
-
-        public string Path
-        {
-            get
-            {
-                if (Parent == null)
-                {
-                    return Name;
-                }
-                return Parent.Path + "/" + Name;
-            }
-        }
-
-        public Entry() { }
-
-        internal Entry(Slice<byte> filenameTable, ushort id, int skipFntBytes)
-        {
-            this.ID = id;
-            nameListStart = filenameTable.ReadUInt(id * 8 + skipFntBytes);
-            firstFileIndex = filenameTable.ReadUShort(id * 8 + 4 + skipFntBytes);
-            parentDirectory = filenameTable.ReadUShort(id * 8 + 6 + skipFntBytes);
-        }
-
-        public Entry LookUp(string path)
-        {
-            return LookUpImpl(path, 0);
-        }
-
-        private Entry LookUpImpl(string path, int start)
-        {
-            if (path.Length <= start)
-            {
-                return this;
-            }
-            if (IsFile)
-            {
-                return null;
-            }
-            var s = path.IndexOf('/', start + 1);
-            var nextElement = path.Substring(start + 1, start - s);
-            foreach (var entry in Entries)
-            {
-                if (entry.Name == nextElement)
-                {
-                    return entry.LookUpImpl(path, s);
-                }
-            }
-            return null;
-        }
-    }
-
-    public struct RelativeRange
-    {
-        public uint Start, End;
     }
 }
