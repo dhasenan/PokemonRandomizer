@@ -47,14 +47,8 @@ namespace Ikeran.NDS
                 dirs.Add(new Entry(fnt, i));
             }
             dirs.Sort((a, b) => a.firstFileIndex.CompareTo(b.firstFileIndex));
-            // The filename section has a slightly weird format.
-            // For files, the format is just length followed by the string data. Fine.
-            // For directories, the first byte is `length | 0x80`, then string data,
-            // then a two-byte value indicating a directory ID.
-            // So for instance with PkmnBlk, `/a` has `81 61 01-f0` and `/dl_rom` has
-            // `86 64-6c-5f-72-6f-6d 1d-f0`. That means directory IDs 0xf001 and 0xf01d.
-            // I think?
 
+            // TODO Not all filename tables have a namelist. Autopopulate names as a, b, c ?
             var nameSection = fnt.After(root.nameListStart);
             uint minFileId = uint.MaxValue;
             uint maxFileId = 0;
@@ -104,17 +98,37 @@ namespace Ikeran.NDS
             }
         }
 
+        public Entry TryLookUp(string extractedFile)
+        {
+            Entry current = Root;
+            var parts = extractedFile.Trim('/').Split('/');
+            foreach (var part in parts)
+            {
+                foreach (var child in current.Entries)
+                {
+                    if (child.Name == part)
+                    {
+                        current = child;
+                        goto next;
+                    }
+                }
+                return null;
+                next: { }
+            }
+            return current;
+        }
+
         public Entry Root { get; }
         public List<Entry> AnonymousFiles { get; }
 
         private static List<NameEntry> ParseNames(Slice<byte> nameSection)
         {
             var names = new List<NameEntry>();
-            // There's an off-by-one here somewhere and I'm not sure where.
             while (nameSection.Count > 0)
             {
                 var name = new NameEntry();
                 var length = nameSection[0];
+                // Each blob of names ends with a NUL.
                 if (length == 0) break;
                 if ((length & 0x80) == 0x80)
                 {

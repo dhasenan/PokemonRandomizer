@@ -52,34 +52,38 @@ namespace Ikeran.NDS
             // - [14:16] number of sub-segments
             var remainder = data;
             Magic = remainder.ReadString(0, 4);
+            var c = remainder.ReadUInt(4);
+            remainder.BigEndian = !remainder.BigEndian;
             var length = remainder.ReadUInt(8);
             remainder = remainder.Until(length);
-            Data = remainder;
+            var headerLength = remainder.ReadUShort(0xC);
             var numSections = remainder.ReadUShort(0xE);
             log.Trace("nds rom segment at {3:X}, magic {0}, length {1:X}, sections {2:X}", Magic, length, numSections, remainder.Offset);
-            Header = remainder.Until(length & 0xFF);
+            Header = remainder.Until(headerLength);
+            Data = remainder[headerLength, length - headerLength];
 
-            remainder = remainder.After(length & 0xFF);
-            if (Magic != "SDAT")  // sdat has nonstandard format
+            remainder = remainder.After(headerLength);
+
+            // SDAT has nonstandard format
+            if (Magic == "SDAT") return;
+            for (int i = 0; i < numSections; i++)
             {
-                for (int i = 0; i < numSections; i++)
+                if (remainder.Count < 8)
                 {
-                    if (remainder.Count < 4)
-                    {
-                        log.Trace("malformed segment at {0}; skipping child sections", data.Offset);
-                        break;
-                    }
-                    length = remainder.ReadUInt(4);
-                    if (length > remainder.Count)
-                    {
-                        log.Trace("malformed segment at {0}; skipping child sections", data.Offset);
-                        break;
-                    }
-                    var section = new Section(remainder.Until(length));
-                    Sections.Add(section);
-                    remainder = remainder.After(length);
-                    log.Trace("nds rom section, magic {0}, length {1:X}", section.Magic, length);
+                    log.Trace("malformed segment at {0}; skipping child sections", data.Offset);
+                    break;
                 }
+                length = remainder.ReadUInt(4);
+                log.Info($"segment at {remainder.Offset:x} length {length:x}");
+                if (length > remainder.Count)
+                {
+                    log.Trace("malformed segment at {0}; skipping child sections", data.Offset);
+                    break;
+                }
+                var section = new Section(remainder[0, length]);
+                Sections.Add(section);
+                remainder = remainder.After(length);
+                log.Trace("nds rom section, magic {0}, length {1:X}", section.Magic, length);
             }
         }
 
