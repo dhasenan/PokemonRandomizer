@@ -27,7 +27,11 @@ namespace Ikeran.NDS
             Contract.Assert(() => segment.Sections[1].Magic == "BTNF");
             Contract.Assert(() => segment.Sections[2].Magic == "GMIF");
 
-            FileTable = new FileTable(segment.Sections[0].Body, segment.Sections[1].Body, segment.Sections[2].Body);
+            FileTable = new FileTable(
+                segment.Sections[0].Data.After(8),
+                segment.Sections[1].Data,
+                segment.Sections[2].Data,
+                mode: FileTable.Mode.Narc);
         }
 
         public Entry Root { get => FileTable.Root; }

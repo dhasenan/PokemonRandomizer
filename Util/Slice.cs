@@ -46,7 +46,7 @@ namespace Ikeran.Util
 
         public Slice<T> After(int start)
         {
-            return new Slice<T>(this, (int)start, Count);
+            return new Slice<T>(this, start, Count);
         }
 
         public Slice<T> After(uint start)
@@ -76,11 +76,7 @@ namespace Ikeran.Util
         {
             get
             {
-                var count = Count;
-                Contract.Assert(() => start >= 0);
-                Contract.Assert(() => start <= end);
-                Contract.Assert(() => end <= count);
-                return new Slice<T>(this.Array, this.Offset + start, this.Offset + end);
+                return new Slice<T>(this, start, end);
             }
         }
 
@@ -114,7 +110,7 @@ namespace Ikeran.Util
         public SliceEnumerator(Slice<T> slice)
         {
             this.slice = slice;
-            this.i = -1;
+            i = -1;
         }
 
         public T Current => slice[i];

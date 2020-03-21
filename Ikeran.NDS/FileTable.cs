@@ -9,15 +9,22 @@ namespace Ikeran.NDS
 {
     public class FileTable
     {
+        public enum Mode
+        {
+            Rom,
+            Narc,
+        }
+
         private static readonly Logger log = LogManager.GetCurrentClassLogger();
 
-        public FileTable(Slice<byte> fat, Slice<byte> fnt, Slice<byte> data)
+        public FileTable(Slice<byte> fat, Slice<byte> fnt, Slice<byte> data, Mode mode)
         {
+            log.Info($"fat: {fat.Offset:x}; fnt: {fnt.Offset:x}; data: {data.Offset:x}");
             Entry GetFile(ushort fileId, string name)
             {
                 if (fileId >= fat.Count / 8)
                 {
-                    throw new Exception($"invalid file name {name} id {fileId:X}");
+                    throw new Exception($"invalid file, name {name}, id {fileId:X}");
                 }
                 var start = fat.ReadUInt(8 * fileId);
                 var end = fat.ReadUInt(8 * fileId + 4);
@@ -36,26 +43,47 @@ namespace Ikeran.NDS
             }
 
             // first read the root directory
-            var root = new Entry(fnt, 0);
-            var numFiles = root.parentDirectory;
+            var root = new Entry(fnt, 0, mode == Mode.Narc ? 4 : 0)
+            {
+                IsFile = false
+            };
+            int numFiles;
+            if (mode == Mode.Rom)
+            {
+                numFiles = root.parentDirectory;
+                root.parentDirectory = 0;
+            }
+            else
+            {
+                numFiles = fat.ReadInt(0);
+                fat = fat.After(4);
+            }
             root.parentDirectory = 0;
             root.ID = 0xF000;
             Root = root;
             var dirs = new List<Entry> { root };
             for (ushort i = 1; i < numFiles; i++)
             {
-                dirs.Add(new Entry(fnt, i));
+                dirs.Add(new Entry(fnt, i, mode == Mode.Narc ? 4 : 0));
             }
             dirs.Sort((a, b) => a.firstFileIndex.CompareTo(b.firstFileIndex));
 
-            // TODO Not all filename tables have a namelist. Autopopulate names as a, b, c ?
-            var nameSection = fnt.After(root.nameListStart);
             uint minFileId = uint.MaxValue;
             uint maxFileId = 0;
+            if (root.nameListStart == 0)
+            {
+                // We don't have any explicitly named files.
+                minFileId = 1;
+                maxFileId = 0;
+                goto nameListRead;
+            }
+            log.Info("root name list starts at {0:x}", root.nameListStart);
+            var nameSection = fnt.After(root.nameListStart);
             for (int i = 0; i < dirs.Count; i++)
             {
                 var dir = dirs[i];
                 uint endOfMyNames = (i < dirs.Count - 1) ? dirs[i + 1].nameListStart : (uint)fnt.Count;
+                log.Info($"name list {i} data: {dir.nameListStart:x} - {endOfMyNames}; fnt size: {fnt.Count:x}; num dirs: {dirs.Count}");
                 var names = ParseNames(fnt[dir.nameListStart, endOfMyNames]);
                 ushort fileNum = 0;
                 for (int j = 0; j < names.Count; j++)
@@ -87,6 +115,7 @@ namespace Ikeran.NDS
             }
 
             log.Trace($"We've found names for files between {minFileId} and {maxFileId} inclusive");
+        nameListRead:
             AnonymousFiles = new List<Entry>();
             for (ushort fileId = 0; fileId < minFileId; fileId++)
             {
@@ -210,12 +239,12 @@ namespace Ikeran.NDS
 
         public Entry() { }
 
-        internal Entry(Slice<byte> filenameTable, ushort id)
+        internal Entry(Slice<byte> filenameTable, ushort id, int skipFntBytes)
         {
             this.ID = id;
-            nameListStart = filenameTable.ReadUInt(id * 8);
-            firstFileIndex = filenameTable.ReadUShort(id * 8 + 4);
-            parentDirectory = filenameTable.ReadUShort(id * 8 + 6);
+            nameListStart = filenameTable.ReadUInt(id * 8 + skipFntBytes);
+            firstFileIndex = filenameTable.ReadUShort(id * 8 + 4 + skipFntBytes);
+            parentDirectory = filenameTable.ReadUShort(id * 8 + 6 + skipFntBytes);
         }
 
         public Entry LookUp(string path)

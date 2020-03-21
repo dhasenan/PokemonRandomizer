@@ -47,7 +47,7 @@ namespace Ikeran.NDS
             var fat = _data[fatOffset, fatOffset + fatLength];
             var fnt = _data[fntOffset, fntOffset + fntLength];
 
-            FileTable = new FileTable(fat, fnt, _data);
+            FileTable = new FileTable(fat, fnt, _data, FileTable.Mode.Rom);
         }
     }
 }

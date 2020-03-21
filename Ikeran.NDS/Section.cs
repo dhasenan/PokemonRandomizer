@@ -11,6 +11,7 @@ namespace Ikeran.NDS
         private static Logger log = LogManager.GetCurrentClassLogger();
 
         public string Magic { get; }
+        public Slice<byte> Data { get; }
         public Slice<byte> Header { get; }
         public Slice<byte> Body { get; }
 
@@ -18,8 +19,8 @@ namespace Ikeran.NDS
         {
             // The header is constrained to <= 255 bytes.
             // The body must be a multiple of 256 bytes.
-            var headerLength = data.Count & 0xFF;
-            
+            var headerLength = data.ReadUInt(4);
+            Data = data;
             Header = data.Until(headerLength);
             Body = data.After(headerLength);
             Magic = data.ReadString(0, 4);
@@ -70,20 +71,21 @@ namespace Ikeran.NDS
             {
                 if (remainder.Count < 8)
                 {
-                    log.Trace("malformed segment at {0}; skipping child sections", data.Offset);
+                    log.Trace("malformed section at {0}; skipping child sections", data.Offset);
                     break;
                 }
                 length = remainder.ReadUInt(4);
-                log.Info($"segment at {remainder.Offset:x} length {length:x}");
+                log.Info($"section at {remainder.Offset:x} length {length:x}");
                 if (length > remainder.Count)
                 {
-                    log.Trace("malformed segment at {0}; skipping child sections", data.Offset);
+                    log.Trace("malformed section at {0}; skipping child sections", data.Offset);
                     break;
                 }
-                var section = new Section(remainder[0, length]);
+                var sectionData = remainder[0, length];
+                var section = new Section(sectionData);
                 Sections.Add(section);
                 remainder = remainder.After(length);
-                log.Trace("nds rom section, magic {0}, length {1:X}", section.Magic, length);
+                log.Trace("nds rom section, magic {0}, length {1:x}, offset {2:x}", section.Magic, length, sectionData.Offset);
             }
         }
 
