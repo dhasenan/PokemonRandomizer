@@ -19,7 +19,7 @@ namespace Ikeran.NDS
         private readonly static byte[] _bigEndianSectionMarker = { 0xfe, 0xff, 0x00, 0x01 };
         public string Path { get; }
         public string Name { get; }
-        public FileTable FileTable { get; }
+        public IFileTable FileTable { get; }
 
         public readonly List<Slice<byte>> FilesById;
         public readonly List<Segment> Segments;
@@ -47,7 +47,8 @@ namespace Ikeran.NDS
             var fat = _data[fatOffset, fatOffset + fatLength];
             var fnt = _data[fntOffset, fntOffset + fntLength];
 
-            FileTable = new FileTable(fat, fnt, _data, FileTable.Mode.Rom);
+            FileTable = new RomFileTable();
+            FileTable.Load(fat, fnt, _data);
         }
     }
 }

@@ -85,7 +85,7 @@ namespace Ikeran.NDS
             var fnt = nameTable;
             var fat = allocTable;
 
-            var dirs = ReadDirectoriesWithOffset();
+            var dirs = ReadDirectories();
             dirs.Sort((a, b) => a.firstFileIndex.CompareTo(b.firstFileIndex));
             Root = dirs[0];
             Root.ID = 0xF000;
@@ -170,7 +170,7 @@ namespace Ikeran.NDS
             };
         }
 
-        protected abstract List<Entry> ReadDirectoriesWithOffset();
+        protected abstract List<Entry> ReadDirectories();
 
         internal static List<NameEntry> ParseNames(Slice<byte> nameSection)
         {
@@ -200,46 +200,6 @@ namespace Ikeran.NDS
                 names.Add(name);
             }
             return names;
-        }
-    }
-
-    public class RomFileTable : FileTable
-    {
-        public RomFileTable()
-        {
-            log = LogManager.GetCurrentClassLogger();
-        }
-
-        protected override List<Entry> ReadDirectoriesWithOffset()
-        {
-            var fat = AllocTable;
-            var fnt = NameTable;
-            var root = new Entry(fnt, 0, 0)
-            {
-                IsFile = false
-            };
-            int numFiles = root.parentDirectory;
-            root.parentDirectory = 0;
-            var dirs = new List<Entry> { root };
-            for (ushort i = 1; i < numFiles; i++)
-            {
-                dirs.Add(new Entry(fnt, i, 0));
-            }
-            dirs.Sort((a, b) => a.firstFileIndex.CompareTo(b.firstFileIndex));
-            return dirs;
-        }
-    }
-
-    public class NarcFileTable : FileTable
-    {
-        public NarcFileTable()
-        {
-            log = LogManager.GetCurrentClassLogger();
-        }
-
-        protected override List<Entry> ReadDirectoriesWithOffset()
-        {
-            throw new NotImplementedException();
         }
     }
 

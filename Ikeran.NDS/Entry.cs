@@ -13,7 +13,6 @@ namespace Ikeran.NDS
         public ushort ID { get; internal set; }
         internal ushort firstFileIndex;
         internal ushort parentDirectory;
-        internal RelativeRange fileData;
         internal uint nameListStart;
 
         public Entry Parent { get; internal set; }
